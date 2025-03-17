@@ -40,4 +40,4 @@ pip install onnxruntime
 python main.py --model rtdetr-l.onnx --img image.jpg --conf-thres 0.5 --iou-thres 0.5
 ```
 
-确保将 `rtdetr-l.onnx` 替换为您的 RTDETR ONNX 模型文件的路径，将 `image.jpg` 替换为您的输入图像路径，并根据需要调整置信度阈值（`conf-thres`）和 IoU 阈值（`iou-thres`）。
+"确保将 `rtdetr-l.onnx` 替换为您的 RTDETR ONNX 模型文件路径，将 `image.jpg` 替换为您的输入图像路径，并根据需要调整置信度阈值（`conf-thres`）和 IoU 阈值（`iou-thres`）。RTDETRv2 ONNX 模型文件可在 [RT-DETRv2 GitHub 仓库](https://github.com/lyuwenyu/RT-DETR/tree/main/rtdetrv2_pytorch) 获取。"

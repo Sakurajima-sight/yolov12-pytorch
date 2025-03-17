@@ -29,13 +29,15 @@ class RTDETR:
         self.conf_thres = conf_thres
         self.iou_thres = iou_thres
 
+        # 使用 OpenCV 读取输入图像
+        self.img = cv2.imread(self.img_path)
+
         # 使用 CUDA 和 CPU 执行提供程序设置 ONNX 运行时会话
         self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider", "CUDAExecutionProvider"])
         self.model_input = self.session.get_inputs()
         self.input_width = self.model_input[0].shape[2]
-        print(self.input_width)
         self.input_height = self.model_input[0].shape[3]
-        print(self.input_height)
+        self.orig_target_sizes = np.array([[self.img.shape[1], self.img.shape[0]]], dtype=np.int64) 
 
 
         # 从 COCO 数据集的 YAML 文件加载类名
@@ -110,9 +112,6 @@ class RTDETR:
         返回：
             image_data: 预处理后的图像数据，准备进行推理。
         """
-        # 使用 OpenCV 读取输入图像
-        self.img = cv2.imread(self.img_path)
-
         # 获取输入图像的高度和宽度
         self.img_height, self.img_width = self.img.shape[:2]
 
@@ -167,32 +166,18 @@ class RTDETR:
         返回：
             np.array: 带有检测结果的标注图像。
         """
-        # 压缩模型输出，去除多余的维度
-        outputs = np.squeeze(model_output[0]).T
-
+        # import ipdb
+        # ipdb.set_trace()
         # 从模型输出中提取边界框和得分
-        boxes = outputs[:, :4]
-        scores = outputs[:, 4:]
+        boxes = np.squeeze(model_output[1], axis=0)
 
         # 获取每个检测的类标签和得分
-        labels = np.argmax(scores, axis=1)
-        scores = np.max(scores, axis=1)
+        labels = np.squeeze(model_output[0], axis=0)
+        scores = np.squeeze(model_output[2], axis=0)
 
         # 应用置信度阈值，过滤掉低置信度的检测
         mask = scores > self.conf_thres
         boxes, scores, labels = boxes[mask], scores[mask], labels[mask]
-
-        boxes[:, 0] /= self.model_input[0].shape[2]   # cx 归一化
-        boxes[:, 1] /= self.model_input[0].shape[3]  # cy 归一化
-        boxes[:, 2] /= self.model_input[0].shape[2]   # w 归一化
-        boxes[:, 3] /= self.model_input[0].shape[3]  # h 归一化
-
-        # 将边界框转换为 (x_min, y_min, x_max, y_max) 格式
-        boxes = self.bbox_cxcywh_to_xyxy(boxes)
-
-        # 缩放边界框以匹配原始图像的尺寸
-        boxes[:, 0::2] *= self.img_width
-        boxes[:, 1::2] *= self.img_height
 
         # 非极大值抑制 (NMS)
         if len(boxes) > 0:
@@ -222,9 +207,14 @@ class RTDETR:
         """
         # 对图像进行预处理，准备模型输入
         image_data = self.preprocess()
-
         # 运行模型推理
-        model_output = self.session.run(None, {self.model_input[0].name: image_data})
+        model_output = self.session.run(
+            None,
+            {
+                self.model_input[0].name: image_data,  # 'images'
+                self.model_input[1].name: self.orig_target_sizes  # 'orig_target_sizes'
+            }
+        )
 
         # 处理并返回模型输出
         return self.postprocess(model_output)
