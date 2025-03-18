@@ -1,5 +1,5 @@
 *.onnx
 *.pt
-*.mp4
+
 *.pth
 *.avi
