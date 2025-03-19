@@ -3,3 +3,5 @@
 
 *.pth
 *.avi
+
+__pycache__
