@@ -1,0 +1,22 @@
+# Ultralytics YOLO11-cls 图像分类模型，使用 ResNet18 作为骨干网络
+# 模型文档: https://docs.ultralytics.com/models/yolo11
+# 任务文档: https://docs.ultralytics.com/tasks/classify
+
+# 参数
+nc: 10 # 类别数量
+scales: # 模型的复合缩放常数，例如 'model=yolo11n-cls.yaml' 将调用 yolo11-cls.yaml 并使用缩放参数 'n'
+  # [深度, 宽度, 最大通道数]
+  n: [0.33, 0.25, 1024]
+  s: [0.33, 0.50, 1024]
+  m: [0.67, 0.75, 1024]
+  l: [1.00, 1.00, 1024]
+  x: [1.00, 1.25, 1024]
+
+# ResNet18 作为骨干网络
+backbone:
+  # [来源, 重复次数, 模块, 参数]
+  - [-1, 1, TorchVision, [512, "resnet18", "DEFAULT", True, 2]] # 从 ResNet18 末尾裁剪两层
+
+# YOLO11n 头部
+head:
+  - [-1, 1, Classify, [nc]] # 分类层

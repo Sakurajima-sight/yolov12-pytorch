@@ -1,0 +1,21 @@
+# Ultralytics 🚀 AGPL-3.0 许可证 - https://ultralytics.com/license
+
+# 使用 mode="track" 时，BoT-SORT 跟踪器的默认设置
+# 文档和示例请参见 https://docs.ultralytics.com/modes/track/
+# BoT-SORT 源代码请参见 https://github.com/NirAharon/BoT-SORT
+
+tracker_type: botsort # 跟踪器类型，['botsort', 'bytetrack']
+track_high_thresh: 0.25 # 第一次关联的阈值
+track_low_thresh: 0.1 # 第二次关联的阈值
+new_track_thresh: 0.25 # 如果检测没有匹配任何跟踪，初始化新跟踪的阈值
+track_buffer: 30 # 用于计算何时移除跟踪的缓冲区
+match_thresh: 0.8 # 匹配跟踪的阈值
+fuse_score: True # 是否在匹配之前将置信度分数与 IoU 距离融合
+# min_box_area: 10  # 最小框面积的阈值（用于跟踪器评估，目前未使用）
+
+# BoT-SORT 设置
+gmc_method: sparseOptFlow # 全局运动补偿的方法
+# ReID 模型相关的阈值（尚未支持）
+proximity_thresh: 0.5 # 接近度阈值
+appearance_thresh: 0.25 # 外观阈值
+with_reid: False # 是否使用 ReID（重新识别）模型

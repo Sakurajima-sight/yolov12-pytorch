@@ -5,3 +5,5 @@
 *.avi
 
 __pycache__
+tests/datasets/
+runs/
