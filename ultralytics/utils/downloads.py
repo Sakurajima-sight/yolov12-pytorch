@@ -423,6 +423,10 @@ def attempt_download_asset(file, repo="ultralytics/assets", release="v8.3.0", **
     """
     from ultralytics.utils import SETTINGS  # 为避免循环导入，作用域限定
 
+    if 'v12' in str(file):
+        repo = "sunsmarterjie/yolov12"
+        release = "turbo"
+
     # YOLOv3/5u 更新
     file = str(file)
     file = checks.check_yolov5u_filename(file)

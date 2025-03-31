@@ -1148,8 +1148,22 @@ class TorchVision(nn.Module):
         return y
 
 
-from flash_attn.flash_attn_interface import flash_attn_func
-from timm.models.layers import drop_path, trunc_normal_
+import logging
+logger = logging.getLogger(__name__)
+
+USE_FLASH_ATTN = False
+try:
+    import torch
+    if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:  # Ampere or newer
+        from flash_attn.flash_attn_interface import flash_attn_func
+        USE_FLASH_ATTN = True
+    else:
+        from torch.nn.functional import scaled_dot_product_attention as sdpa
+        logger.warning("FlashAttention is not available on this device. Using scaled_dot_product_attention instead.")
+except Exception:
+    from torch.nn.functional import scaled_dot_product_attention as sdpa
+    logger.warning("FlashAttention is not available on this device. Using scaled_dot_product_attention instead.")
+
 
 
 class AAttn(nn.Module):
@@ -1162,12 +1176,12 @@ class AAttn(nn.Module):
         area (int, 可选): 将特征图划分为多少个区域。默认为 1。
 
     方法:
-        forward: 对输入张量执行注意力机制处理，并输出结果。
+        forward: 执行输入张量的前向过程，并在区域注意力机制执行后输出张量。
 
     示例:
         >>> import torch
         >>> from ultralytics.nn.modules import AAttn
-        >>> model = AAttn(dim=64, num_heads=3, area=4)
+        >>> model = AAttn(dim=64, num_heads=2, area=4)
         >>> x = torch.randn(2, 64, 128, 128)
         >>> output = model(x)
         >>> print(output.shape)
@@ -1179,63 +1193,76 @@ class AAttn(nn.Module):
     def __init__(self, dim, num_heads, area=1):
         """初始化 area-attention 模块，为 YOLO 提供轻量而高效的注意力机制。"""
         super().__init__()
-
         self.area = area
+
         self.num_heads = num_heads
         self.head_dim = head_dim = dim // num_heads
         all_head_dim = head_dim * self.num_heads
 
-        self.qkv = Conv(dim, all_head_dim * 3, 1, act=False)  # QKV 融合卷积
+        self.qk = Conv(dim, all_head_dim * 2, 1, act=False)  # QK 融合卷积
+        self.v = Conv(dim, all_head_dim, 1, act=False)  # V 提取卷积
         self.proj = Conv(all_head_dim, dim, 1, act=False)     # 输出映射
-        self.pe = Conv(all_head_dim, dim, 9, 1, 4, g=dim, act=False)  # 位置编码
+
+        self.pe = Conv(all_head_dim, dim, 5, 1, 2, g=dim, act=False)  # 位置编码
+
 
     def forward(self, x):
-        """将输入张量 x 应用于 area-attention 或全局注意力处理。"""
+        """将输入张量 x 应用于 area-attention。"""
         B, C, H, W = x.shape
         N = H * W
-        if x.is_cuda:
-            qkv = self.qkv(x).flatten(2).transpose(1, 2)
+
+        if x.is_cuda and USE_FLASH_ATTN:
+            qk = self.qk(x).flatten(2).transpose(1, 2)
+            v = self.v(x)
+            pp = self.pe(v)
+            v = v.flatten(2).transpose(1, 2)
+
             if self.area > 1:
-                qkv = qkv.reshape(B * self.area, N // self.area, C * 3)
-                B, N, _ = qkv.shape
-            q, k, v = qkv.view(B, N, self.num_heads, self.head_dim * 3).split(
-                [self.head_dim, self.head_dim, self.head_dim], dim=3
-            )
+                qk = qk.reshape(B * self.area, N // self.area, C * 2)
+                v = v.reshape(B * self.area, N // self.area, C)
+                B, N, _ = qk.shape
+            q, k = qk.split([C, C], dim=2)
+            q = q.view(B, N, self.num_heads, self.head_dim)
+            k = k.view(B, N, self.num_heads, self.head_dim)
+            v = v.view(B, N, self.num_heads, self.head_dim)
+
             x = flash_attn_func(
                 q.contiguous().half(),
                 k.contiguous().half(),
                 v.contiguous().half()
             ).to(q.dtype)
+
             if self.area > 1:
                 x = x.reshape(B // self.area, N * self.area, C)
-                v = v.reshape(B // self.area, N * self.area, C)
                 B, N, _ = x.shape
             x = x.reshape(B, H, W, C).permute(0, 3, 1, 2)
-            v = v.reshape(B, H, W, C).permute(0, 3, 1, 2)
         else:
-            qkv = self.qkv(x).flatten(2)
+            qk = self.qk(x).flatten(2)
+            v = self.v(x)
+            pp = self.pe(v)
+            v = v.flatten(2)
             if self.area > 1:
-                qkv = qkv.reshape(B * self.area, C * 3, N // self.area)
-                B, _, N = qkv.shape
-            q, k, v = qkv.view(B, self.num_heads, self.head_dim * 3, N).split(
-                [self.head_dim, self.head_dim, self.head_dim], dim=2
-            )
-            attn = (q.transpose(-2, -1) @ k) * (self.num_heads ** -0.5)  # 缩放点积注意力
+                qk = qk.reshape(B * self.area, C * 2, N // self.area)
+                v = v.reshape(B * self.area, C, N // self.area)
+                B, _, N = qk.shape
+
+            q, k = qk.split([C, C], dim=1)
+            q = q.view(B, self.num_heads, self.head_dim, N)
+            k = k.view(B, self.num_heads, self.head_dim, N)
+            v = v.view(B, self.num_heads, self.head_dim, N)
+            attn = (q.transpose(-2, -1) @ k) * (self.head_dim ** -0.5)  # 缩放点积注意力
             max_attn = attn.max(dim=-1, keepdim=True).values             # 数值稳定处理
             exp_attn = torch.exp(attn - max_attn)
             attn = exp_attn / exp_attn.sum(dim=-1, keepdim=True)
             x = (v @ attn.transpose(-2, -1))
+
             if self.area > 1:
                 x = x.reshape(B // self.area, C, N * self.area)
-                v = v.reshape(B // self.area, C, N * self.area)
                 B, _, N = x.shape
             x = x.reshape(B, C, H, W)
-            v = v.reshape(B, C, H, W)
 
-        x = x + self.pe(v)  # 加上位置编码
-        x = self.proj(x)    # 映射回原始通道
-        return x
-  
+        return self.proj(x + pp)
+    
 
 class ABlock(nn.Module):
     """
@@ -1270,14 +1297,13 @@ class ABlock(nn.Module):
         self.attn = AAttn(dim, num_heads=num_heads, area=area)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = nn.Sequential(Conv(dim, mlp_hidden_dim, 1), Conv(mlp_hidden_dim, dim, 1, act=False))
-
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
-        """初始化卷积层权重。"""
+        """使用截断正态分布初始化权重。"""
         if isinstance(m, nn.Conv2d):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Conv2d) and m.bias is not None:
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
@@ -1289,9 +1315,9 @@ class ABlock(nn.Module):
 
 class A2C2f(nn.Module):  
     """
-    A2C2f 模块，也称为 R-ELAN，是一种集成 ABlock 区域注意力机制的残差增强特征提取结构。
+    ABlock 类实现了一个区域注意力块，具有有效的特征提取功能。
 
-    该类基于 C2f 模块拓展，加入 ABlock 区域注意力机制，实现更快的注意力与特征提取过程。
+    该类封装了应用多头注意力机制的功能，其中特征图被划分为多个区域，并通过前馈神经网络层进行处理。
 
     属性：
         c1 (int): 输入通道数；
@@ -1299,80 +1325,47 @@ class A2C2f(nn.Module):
         n (int, 可选): 堆叠的 2×ABlock 模块数量，默认为 1；
         a2 (bool, 可选): 是否使用区域注意力，默认为 True；
         area (int, 可选): 特征图划分的区域数，默认为 1；
-        align (bool, 可选): 是否对通道数进行对齐，默认为 False；
         residual (bool, 可选): 是否使用残差（带 layer scale），默认为 False；
-        e (float, 可选): 通道扩展比例，默认为 0.5；
         mlp_ratio (float, 可选): MLP 扩展比例，默认为 1.2；
+        e（浮动类型，可选）：R-ELAN 模块的扩展比率。默认值为 0.5；
         g (int, 可选): 分组卷积的组数，默认为 1；
         shortcut (bool, 可选): 是否使用残差连接，默认为 True。
 
     方法：
         forward: 执行 A2C2f 模块的前向传播。
-        forward_split: 使用 split() 替代 chunk() 执行前向传播。
 
     示例：
         >>> import torch
         >>> from ultralytics.nn.modules import A2C2f
-        >>> model = A2C2f(c1=64, c2=64, n=2, a2=True, area=4, align=False, residual=True, e=0.5)
+        >>> model = A2C2f(c1=64, c2=64, n=2, a2=True, area=4, residual=True, e=0.5)
         >>> x = torch.randn(2, 64, 128, 128)
         >>> output = model(x)
         >>> print(output.shape)
     """
 
-    def __init__(self, c1, c2, n=1, a2=True, area=1, align=False, residual=False, e=0.5, mlp_ratio=1.2, g=1, shortcut=True):
+    def __init__(self, c1, c2, n=1, a2=True, area=1, residual=False, mlp_ratio=2.0, e=0.5, g=1, shortcut=True):
         super().__init__()
-
-        self.a2 = a2
-        self.residual = residual
         c_ = int(c2 * e)  # 中间通道数
         assert c_ % 32 == 0, "ABlock 的维度必须为 32 的倍数。"
 
         # num_heads = c_ // 64 if c_ // 64 >= 2 else c_ // 32
         num_heads = c_ // 32
 
-        if self.a2:
-            self.cv1 = Conv(c1, c_, 1, 1)
-            self.cv2 = Conv((1 + n) * c_, c2, 1)  # 可选使用 FReLU 激活
+        self.cv1 = Conv(c1, c_, 1, 1)
+        self.cv2 = Conv((1 + n) * c_, c2, 1)  # 可选使用 FReLU 激活
 
-            if residual:
-                self.align = Conv(c1, c2, 1, 1) if align else nn.Identity()
-                init_values = 0.01  # 初始化缩放因子
-                self.gamma = nn.Parameter(init_values * torch.ones((c2)), requires_grad=True)
-            else:
-                self.align, self.gamma = None, None
-        else:
-            self.cv1 = Conv(c1, 2 * c_, 1, 1)
-            self.cv2 = Conv((2 + n) * c_, c2, 1)  # 可选使用 FReLU 激活
+        init_values = 0.01  # 初始化缩放因子
+        self.gamma = nn.Parameter(init_values * torch.ones((c2)), requires_grad=True) if a2 and residual else None
 
         self.m = nn.ModuleList(
-            nn.Sequential(*(ABlock(c_, num_heads, mlp_ratio, area) for _ in range(2))) if a2
-            else Bottleneck(c_, c_, shortcut, g) for _ in range(n)
+            nn.Sequential(*(ABlock(c_, num_heads, mlp_ratio, area) for _ in range(2))) if a2 else C3k(c_, c_, 2, shortcut, g) for _ in range(n)
         )
 
     def forward(self, x):
         """执行 R-ELAN 模块的前向传播。"""
-        if self.a2:
-            y = [self.cv1(x)]
-            y.extend(m(y[-1]) for m in self.m)
-            if self.residual:
-                return self.align(x) + (self.gamma * self.cv2(torch.cat(y, 1)).permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-            else:
-                return self.cv2(torch.cat(y, 1))
-        else:
-            y = list(self.cv1(x).chunk(2, 1))
-            y.extend(m(y[-1]) for m in self.m)
-            return self.cv2(torch.cat(y, 1))
+        y = [self.cv1(x)]
+        y.extend(m(y[-1]) for m in self.m)
+        if self.gamma is not None:
+            return x + self.gamma.view(1, -1, 1, 1) * self.cv2(torch.cat(y, 1))
+        return self.cv2(torch.cat(y, 1))
 
-    def forward_split(self, x):
-        """使用 split() 替代 chunk() 执行前向传播。"""
-        if self.a2:
-            y = [self.cv1(x)]
-            y.extend(m(y[-1]) for m in self.m)
-            if self.residual:
-                return self.align(x) + (self.gamma * self.cv2(torch.cat(y, 1)).permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-            else:
-                return self.cv2(torch.cat(y, 1))
-        else:
-            y = list(self.cv1(x).chunk(2, 1))
-            y.extend(m(y[-1]) for m in self.m)
-            return self.cv2(torch.cat(y, 1))

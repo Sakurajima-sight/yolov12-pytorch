@@ -14,7 +14,7 @@ except (ImportError, AssertionError):
 
 def on_fit_epoch_end(trainer):
     """在每个周期结束时将训练指标发送到Ray Tune。"""
-    if ray.train._internal.session._get_session():  # 替代已弃用的ray.tune.is_session_enabled()
+    if ray.train._internal.session.get_session():  # 替代已弃用的ray.tune.is_session_enabled()
         metrics = trainer.metrics
         session.report({**metrics, **{"epoch": trainer.epoch + 1}})
 

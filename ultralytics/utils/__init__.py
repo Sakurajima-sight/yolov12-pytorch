@@ -761,7 +761,7 @@ def get_ubuntu_version():
             return None
 
 
-def get_user_config_dir(sub_dir="Ultralytics"):
+def get_user_config_dir(sub_dir="yolov12"):
     """
     根据操作系统环境返回适当的配置目录。
 
