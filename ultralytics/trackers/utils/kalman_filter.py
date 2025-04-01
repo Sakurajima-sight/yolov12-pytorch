@@ -157,124 +157,124 @@ class KalmanFilterXYAH:
         covariance = np.linalg.multi_dot((self._update_mat, covariance, self._update_mat.T))
         return mean, covariance + innovation_cov
 
-def multi_predict(self, mean: np.ndarray, covariance: np.ndarray) -> tuple:
-    """
-    对多个目标状态运行 Kalman 滤波器的预测步骤（向量化版本）。
+    def multi_predict(self, mean: np.ndarray, covariance: np.ndarray) -> tuple:
+        """
+        对多个目标状态运行 Kalman 滤波器的预测步骤（向量化版本）。
 
-    参数:
-        mean (ndarray): 上一时刻各目标状态的均值矩阵，维度为 Nx8。
-        covariance (ndarray): 上一时刻各目标状态的协方差矩阵，维度为 Nx8x8。
+        参数:
+            mean (ndarray): 上一时刻各目标状态的均值矩阵，维度为 Nx8。
+            covariance (ndarray): 上一时刻各目标状态的协方差矩阵，维度为 Nx8x8。
 
-    返回:
-        (tuple[ndarray, ndarray]): 返回预测后的状态均值矩阵和协方差矩阵。
-            均值矩阵形状为 (N, 8)，协方差矩阵形状为 (N, 8, 8)。未观测到的速度分量初始化为 0 均值。
+        返回:
+            (tuple[ndarray, ndarray]): 返回预测后的状态均值矩阵和协方差矩阵。
+                均值矩阵形状为 (N, 8)，协方差矩阵形状为 (N, 8, 8)。未观测到的速度分量初始化为 0 均值。
 
-    示例:
-        >>> mean = np.random.rand(10, 8)  # 10 个目标状态
-        >>> covariance = np.random.rand(10, 8, 8)  # 每个目标的协方差矩阵
-        >>> predicted_mean, predicted_covariance = kalman_filter.multi_predict(mean, covariance)
-    """
-    std_pos = [
-        self._std_weight_position * mean[:, 3],
-        self._std_weight_position * mean[:, 3],
-        1e-2 * np.ones_like(mean[:, 3]),
-        self._std_weight_position * mean[:, 3],
-    ]
-    std_vel = [
-        self._std_weight_velocity * mean[:, 3],
-        self._std_weight_velocity * mean[:, 3],
-        1e-5 * np.ones_like(mean[:, 3]),
-        self._std_weight_velocity * mean[:, 3],
-    ]
-    sqr = np.square(np.r_[std_pos, std_vel]).T
+        示例:
+            >>> mean = np.random.rand(10, 8)  # 10 个目标状态
+            >>> covariance = np.random.rand(10, 8, 8)  # 每个目标的协方差矩阵
+            >>> predicted_mean, predicted_covariance = kalman_filter.multi_predict(mean, covariance)
+        """
+        std_pos = [
+            self._std_weight_position * mean[:, 3],
+            self._std_weight_position * mean[:, 3],
+            1e-2 * np.ones_like(mean[:, 3]),
+            self._std_weight_position * mean[:, 3],
+        ]
+        std_vel = [
+            self._std_weight_velocity * mean[:, 3],
+            self._std_weight_velocity * mean[:, 3],
+            1e-5 * np.ones_like(mean[:, 3]),
+            self._std_weight_velocity * mean[:, 3],
+        ]
+        sqr = np.square(np.r_[std_pos, std_vel]).T
 
-    motion_cov = [np.diag(sqr[i]) for i in range(len(mean))]
-    motion_cov = np.asarray(motion_cov)
+        motion_cov = [np.diag(sqr[i]) for i in range(len(mean))]
+        motion_cov = np.asarray(motion_cov)
 
-    mean = np.dot(mean, self._motion_mat.T)
-    left = np.dot(self._motion_mat, covariance).transpose((1, 0, 2))
-    covariance = np.dot(left, self._motion_mat.T) + motion_cov
+        mean = np.dot(mean, self._motion_mat.T)
+        left = np.dot(self._motion_mat, covariance).transpose((1, 0, 2))
+        covariance = np.dot(left, self._motion_mat.T) + motion_cov
 
-    return mean, covariance
+        return mean, covariance
 
-def update(self, mean: np.ndarray, covariance: np.ndarray, measurement: np.ndarray) -> tuple:
-    """
-    运行 Kalman 滤波器的校正步骤。
+    def update(self, mean: np.ndarray, covariance: np.ndarray, measurement: np.ndarray) -> tuple:
+        """
+        运行 Kalman 滤波器的校正步骤。
 
-    参数:
-        mean (ndarray): 预测状态的均值向量（8 维）。
-        covariance (ndarray): 状态的协方差矩阵（8x8）。
-        measurement (ndarray): 4 维测量向量 (x, y, a, h)，其中 (x, y) 是中心位置，a 是宽高比，h 是目标高度。
+        参数:
+            mean (ndarray): 预测状态的均值向量（8 维）。
+            covariance (ndarray): 状态的协方差矩阵（8x8）。
+            measurement (ndarray): 4 维测量向量 (x, y, a, h)，其中 (x, y) 是中心位置，a 是宽高比，h 是目标高度。
 
-    返回:
-        (tuple[ndarray, ndarray]): 返回校正后的状态分布（均值和协方差）。
+        返回:
+            (tuple[ndarray, ndarray]): 返回校正后的状态分布（均值和协方差）。
 
-    示例:
-        >>> kf = KalmanFilterXYAH()
-        >>> mean = np.array([0, 0, 1, 1, 0, 0, 0, 0])
-        >>> covariance = np.eye(8)
-        >>> measurement = np.array([1, 1, 1, 1])
-        >>> new_mean, new_covariance = kf.update(mean, covariance, measurement)
-    """
-    projected_mean, projected_cov = self.project(mean, covariance)
+        示例:
+            >>> kf = KalmanFilterXYAH()
+            >>> mean = np.array([0, 0, 1, 1, 0, 0, 0, 0])
+            >>> covariance = np.eye(8)
+            >>> measurement = np.array([1, 1, 1, 1])
+            >>> new_mean, new_covariance = kf.update(mean, covariance, measurement)
+        """
+        projected_mean, projected_cov = self.project(mean, covariance)
 
-    chol_factor, lower = scipy.linalg.cho_factor(projected_cov, lower=True, check_finite=False)
-    kalman_gain = scipy.linalg.cho_solve(
-        (chol_factor, lower), np.dot(covariance, self._update_mat.T).T, check_finite=False
-    ).T
-    innovation = measurement - projected_mean
+        chol_factor, lower = scipy.linalg.cho_factor(projected_cov, lower=True, check_finite=False)
+        kalman_gain = scipy.linalg.cho_solve(
+            (chol_factor, lower), np.dot(covariance, self._update_mat.T).T, check_finite=False
+        ).T
+        innovation = measurement - projected_mean
 
-    new_mean = mean + np.dot(innovation, kalman_gain.T)
-    new_covariance = covariance - np.linalg.multi_dot((kalman_gain, projected_cov, kalman_gain.T))
-    return new_mean, new_covariance
+        new_mean = mean + np.dot(innovation, kalman_gain.T)
+        new_covariance = covariance - np.linalg.multi_dot((kalman_gain, projected_cov, kalman_gain.T))
+        return new_mean, new_covariance
 
-def gating_distance(
-    self,
-    mean: np.ndarray,
-    covariance: np.ndarray,
-    measurements: np.ndarray,
-    only_position: bool = False,
-    metric: str = "maha",
-) -> np.ndarray:
-    """
-    计算状态分布与测量之间的门控距离（gating distance）。
+    def gating_distance(
+        self,
+        mean: np.ndarray,
+        covariance: np.ndarray,
+        measurements: np.ndarray,
+        only_position: bool = False,
+        metric: str = "maha",
+    ) -> np.ndarray:
+        """
+        计算状态分布与测量之间的门控距离（gating distance）。
 
-    一个合适的距离阈值可以通过 `chi2inv95` 获取。如果 `only_position` 为 False，卡方分布的自由度为 4，
-    否则为 2。
+        一个合适的距离阈值可以通过 `chi2inv95` 获取。如果 `only_position` 为 False，卡方分布的自由度为 4，
+        否则为 2。
 
-    参数:
-        mean (ndarray): 状态分布的均值向量（8 维）。
-        covariance (ndarray): 状态分布的协方差矩阵（8x8）。
-        measurements (ndarray): 一个 (N, 4) 的矩阵，表示 N 个测量值，每个测量为 (x, y, a, h)，
-                                其中 (x, y) 是中心位置，a 是宽高比，h 是高度。
-        only_position (bool): 如果为 True，仅使用位置 (x, y) 进行距离计算。
-        metric (str): 距离度量方式，"gaussian" 表示平方欧式距离，"maha" 表示平方马氏距离。
+        参数:
+            mean (ndarray): 状态分布的均值向量（8 维）。
+            covariance (ndarray): 状态分布的协方差矩阵（8x8）。
+            measurements (ndarray): 一个 (N, 4) 的矩阵，表示 N 个测量值，每个测量为 (x, y, a, h)，
+                                    其中 (x, y) 是中心位置，a 是宽高比，h 是高度。
+            only_position (bool): 如果为 True，仅使用位置 (x, y) 进行距离计算。
+            metric (str): 距离度量方式，"gaussian" 表示平方欧式距离，"maha" 表示平方马氏距离。
 
-    返回:
-        (np.ndarray): 返回一个长度为 N 的数组，第 i 个元素表示状态分布与 `measurements[i]` 之间的平方距离。
+        返回:
+            (np.ndarray): 返回一个长度为 N 的数组，第 i 个元素表示状态分布与 `measurements[i]` 之间的平方距离。
 
-    示例:
-        使用马氏距离计算门控距离：
-        >>> kf = KalmanFilterXYAH()
-        >>> mean = np.array([0, 0, 1, 1, 0, 0, 0, 0])
-        >>> covariance = np.eye(8)
-        >>> measurements = np.array([[1, 1, 1, 1], [2, 2, 1, 1]])
-        >>> distances = kf.gating_distance(mean, covariance, measurements, only_position=False, metric="maha")
-    """
-    mean, covariance = self.project(mean, covariance)
-    if only_position:
-        mean, covariance = mean[:2], covariance[:2, :2]
-        measurements = measurements[:, :2]
+        示例:
+            使用马氏距离计算门控距离：
+            >>> kf = KalmanFilterXYAH()
+            >>> mean = np.array([0, 0, 1, 1, 0, 0, 0, 0])
+            >>> covariance = np.eye(8)
+            >>> measurements = np.array([[1, 1, 1, 1], [2, 2, 1, 1]])
+            >>> distances = kf.gating_distance(mean, covariance, measurements, only_position=False, metric="maha")
+        """
+        mean, covariance = self.project(mean, covariance)
+        if only_position:
+            mean, covariance = mean[:2], covariance[:2, :2]
+            measurements = measurements[:, :2]
 
-    d = measurements - mean
-    if metric == "gaussian":
-        return np.sum(d * d, axis=1)
-    elif metric == "maha":
-        cholesky_factor = np.linalg.cholesky(covariance)
-        z = scipy.linalg.solve_triangular(cholesky_factor, d.T, lower=True, check_finite=False, overwrite_b=True)
-        return np.sum(z * z, axis=0)  # 马氏距离的平方
-    else:
-        raise ValueError("无效的距离度量方式")
+        d = measurements - mean
+        if metric == "gaussian":
+            return np.sum(d * d, axis=1)
+        elif metric == "maha":
+            cholesky_factor = np.linalg.cholesky(covariance)
+            z = scipy.linalg.solve_triangular(cholesky_factor, d.T, lower=True, check_finite=False, overwrite_b=True)
+            return np.sum(z * z, axis=0)  # 马氏距离的平方
+        else:
+            raise ValueError("无效的距离度量方式")
 
 
 class KalmanFilterXYWH(KalmanFilterXYAH):

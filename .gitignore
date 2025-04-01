@@ -8,3 +8,4 @@ __pycache__
 tests/datasets/
 runs/
 workspace/
+.gradio/

@@ -131,104 +131,104 @@ class STrack(BaseTrack):
         self.frame_id = frame_id
         self.start_frame = frame_id
 
-def re_activate(self, new_track, frame_id, new_id=False):
-    """使用新的检测数据重新激活先前丢失的轨迹，并更新其状态和属性。"""
-    self.mean, self.covariance = self.kalman_filter.update(
-        self.mean, self.covariance, self.convert_coords(new_track.tlwh)
-    )
-    self.tracklet_len = 0
-    self.state = TrackState.Tracked
-    self.is_activated = True
-    self.frame_id = frame_id
-    if new_id:
-        self.track_id = self.next_id()
-    self.score = new_track.score
-    self.cls = new_track.cls
-    self.angle = new_track.angle
-    self.idx = new_track.idx
+    def re_activate(self, new_track, frame_id, new_id=False):
+        """使用新的检测数据重新激活先前丢失的轨迹，并更新其状态和属性。"""
+        self.mean, self.covariance = self.kalman_filter.update(
+            self.mean, self.covariance, self.convert_coords(new_track.tlwh)
+        )
+        self.tracklet_len = 0
+        self.state = TrackState.Tracked
+        self.is_activated = True
+        self.frame_id = frame_id
+        if new_id:
+            self.track_id = self.next_id()
+        self.score = new_track.score
+        self.cls = new_track.cls
+        self.angle = new_track.angle
+        self.idx = new_track.idx
 
-def update(self, new_track, frame_id):
-    """
-    更新已匹配轨迹的状态。
+    def update(self, new_track, frame_id):
+        """
+        更新已匹配轨迹的状态。
 
-    参数:
-        new_track (STrack): 包含更新信息的新轨迹对象。
-        frame_id (int): 当前帧的编号。
+        参数:
+            new_track (STrack): 包含更新信息的新轨迹对象。
+            frame_id (int): 当前帧的编号。
 
-    示例:
-        使用新的检测信息更新轨迹状态
-        >>> track = STrack([100, 200, 50, 80, 0.9, 1])
-        >>> new_track = STrack([105, 205, 55, 85, 0.95, 1])
-        >>> track.update(new_track, 2)
-    """
-    self.frame_id = frame_id
-    self.tracklet_len += 1
+        示例:
+            使用新的检测信息更新轨迹状态
+            >>> track = STrack([100, 200, 50, 80, 0.9, 1])
+            >>> new_track = STrack([105, 205, 55, 85, 0.95, 1])
+            >>> track.update(new_track, 2)
+        """
+        self.frame_id = frame_id
+        self.tracklet_len += 1
 
-    new_tlwh = new_track.tlwh
-    self.mean, self.covariance = self.kalman_filter.update(
-        self.mean, self.covariance, self.convert_coords(new_tlwh)
-    )
-    self.state = TrackState.Tracked
-    self.is_activated = True
+        new_tlwh = new_track.tlwh
+        self.mean, self.covariance = self.kalman_filter.update(
+            self.mean, self.covariance, self.convert_coords(new_tlwh)
+        )
+        self.state = TrackState.Tracked
+        self.is_activated = True
 
-    self.score = new_track.score
-    self.cls = new_track.cls
-    self.angle = new_track.angle
-    self.idx = new_track.idx
+        self.score = new_track.score
+        self.cls = new_track.cls
+        self.angle = new_track.angle
+        self.idx = new_track.idx
 
-def convert_coords(self, tlwh):
-    """将边界框的左上角-宽高格式转换为中心点-x-y-长宽比-高度格式。"""
-    return self.tlwh_to_xyah(tlwh)
+    def convert_coords(self, tlwh):
+        """将边界框的左上角-宽高格式转换为中心点-x-y-长宽比-高度格式。"""
+        return self.tlwh_to_xyah(tlwh)
 
-@property
-def tlwh(self):
-    """从当前状态估计中返回边界框的左上角-宽度-高度格式。"""
-    if self.mean is None:
-        return self._tlwh.copy()
-    ret = self.mean[:4].copy()
-    ret[2] *= ret[3]
-    ret[:2] -= ret[2:] / 2
-    return ret
+    @property
+    def tlwh(self):
+        """从当前状态估计中返回边界框的左上角-宽度-高度格式。"""
+        if self.mean is None:
+            return self._tlwh.copy()
+        ret = self.mean[:4].copy()
+        ret[2] *= ret[3]
+        ret[:2] -= ret[2:] / 2
+        return ret
 
-@property
-def xyxy(self):
-    """将边界框从 (左上角x, 左上角y, 宽度, 高度) 转换为 (最小x, 最小y, 最大x, 最大y) 格式。"""
-    ret = self.tlwh.copy()
-    ret[2:] += ret[:2]
-    return ret
+    @property
+    def xyxy(self):
+        """将边界框从 (左上角x, 左上角y, 宽度, 高度) 转换为 (最小x, 最小y, 最大x, 最大y) 格式。"""
+        ret = self.tlwh.copy()
+        ret[2:] += ret[:2]
+        return ret
 
-@staticmethod
-def tlwh_to_xyah(tlwh):
-    """将边界框从 tlwh 格式转换为中心点x-y-长宽比-高度 (xyah) 格式。"""
-    ret = np.asarray(tlwh).copy()
-    ret[:2] += ret[2:] / 2
-    ret[2] /= ret[3]
-    return ret
+    @staticmethod
+    def tlwh_to_xyah(tlwh):
+        """将边界框从 tlwh 格式转换为中心点x-y-长宽比-高度 (xyah) 格式。"""
+        ret = np.asarray(tlwh).copy()
+        ret[:2] += ret[2:] / 2
+        ret[2] /= ret[3]
+        return ret
 
-@property
-def xywh(self):
-    """返回当前边界框的位置，格式为 (中心x, 中心y, 宽度, 高度)。"""
-    ret = np.asarray(self.tlwh).copy()
-    ret[:2] += ret[2:] / 2
-    return ret
+    @property
+    def xywh(self):
+        """返回当前边界框的位置，格式为 (中心x, 中心y, 宽度, 高度)。"""
+        ret = np.asarray(self.tlwh).copy()
+        ret[:2] += ret[2:] / 2
+        return ret
 
-@property
-def xywha(self):
-    """返回边界框的 (中心x, 中心y, 宽度, 高度, 角度) 格式，如果没有角度信息则警告并返回 xywh。"""
-    if self.angle is None:
-        LOGGER.warning("⚠️ 警告：未找到 `angle` 属性，返回 `xywh` 代替。")
-        return self.xywh
-    return np.concatenate([self.xywh, self.angle[None]])
+    @property
+    def xywha(self):
+        """返回边界框的 (中心x, 中心y, 宽度, 高度, 角度) 格式，如果没有角度信息则警告并返回 xywh。"""
+        if self.angle is None:
+            LOGGER.warning("⚠️ 警告：未找到 `angle` 属性，返回 `xywh` 代替。")
+            return self.xywh
+        return np.concatenate([self.xywh, self.angle[None]])
 
-@property
-def result(self):
-    """返回当前的跟踪结果，格式为合适的边界框格式。"""
-    coords = self.xyxy if self.angle is None else self.xywha
-    return coords.tolist() + [self.track_id, self.score, self.cls, self.idx]
+    @property
+    def result(self):
+        """返回当前的跟踪结果，格式为合适的边界框格式。"""
+        coords = self.xyxy if self.angle is None else self.xywha
+        return coords.tolist() + [self.track_id, self.score, self.cls, self.idx]
 
-def __repr__(self):
-    """返回 STrack 对象的字符串表示，包含起始帧、结束帧和轨迹 ID。"""
-    return f"OT_{self.track_id}_({self.start_frame}-{self.end_frame})"
+    def __repr__(self):
+        """返回 STrack 对象的字符串表示，包含起始帧、结束帧和轨迹 ID。"""
+        return f"OT_{self.track_id}_({self.start_frame}-{self.end_frame})"
 
 
 class BYTETracker:
