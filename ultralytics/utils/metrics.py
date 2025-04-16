@@ -426,9 +426,9 @@ class ConfusionMatrix:
                 xticklabels=ticklabels,
                 yticklabels=ticklabels,
             ).set_facecolor((1, 1, 1))
-        title = "混淆矩阵" + " 归一化" * normalize
-        ax.set_xlabel("真实")
-        ax.set_ylabel("预测")
+        title = "Confusion Matrix" + " Normalized" * normalize
+        ax.set_xlabel("Ground Truth")
+        ax.set_ylabel("Prediction")
         ax.set_title(title)
         plot_fname = Path(save_dir) / f"{title.lower().replace(' ', '_')}.png"
         fig.savefig(plot_fname, dpi=250)
@@ -462,13 +462,13 @@ def plot_pr_curve(px, py, ap, save_dir=Path("pr_curve.png"), names={}, on_plot=N
     else:
         ax.plot(px, py, linewidth=1, color="grey")  # 绘制(召回率, 精度)
 
-    ax.plot(px, py.mean(1), linewidth=3, color="blue", label=f"所有类别 {ap[:, 0].mean():.3f} mAP@0.5")
-    ax.set_xlabel("召回率")
-    ax.set_ylabel("精度")
+    ax.plot(px, py.mean(1), linewidth=3, color="blue", label=f"All classes {ap[:, 0].mean():.3f} mAP@0.5")
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    ax.set_title("精度-召回曲线")
+    ax.set_title("Precision-Recall Curve")
     fig.savefig(save_dir, dpi=250)
     plt.close(fig)
     if on_plot:
@@ -476,7 +476,7 @@ def plot_pr_curve(px, py, ap, save_dir=Path("pr_curve.png"), names={}, on_plot=N
 
 
 @plt_settings()
-def plot_mc_curve(px, py, save_dir=Path("mc_curve.png"), names={}, xlabel="置信度", ylabel="度量", on_plot=None):
+def plot_mc_curve(px, py, save_dir=Path("mc_curve.png"), names={}, xlabel="Confidence", ylabel="Metric", on_plot=None):
     """绘制度量-置信度曲线."""
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
 
@@ -487,13 +487,13 @@ def plot_mc_curve(px, py, save_dir=Path("mc_curve.png"), names={}, xlabel="置�
         ax.plot(px, py.T, linewidth=1, color="grey")  # 绘制(置信度, 度量)
 
     y = smooth(py.mean(0), 0.05)
-    ax.plot(px, y, linewidth=3, color="blue", label=f"所有类别 {y.max():.2f} 在 {px[y.argmax()]:.3f}")
+    ax.plot(px, y, linewidth=3, color="blue", label=f"All Classes {y.max():.2f} at {px[y.argmax()]:.3f}")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
-    ax.set_title(f"{ylabel}-置信度曲线")
+    ax.set_title(f"{ylabel}-Confidence Curve")
     fig.savefig(save_dir, dpi=250)
     plt.close(fig)
     if on_plot:

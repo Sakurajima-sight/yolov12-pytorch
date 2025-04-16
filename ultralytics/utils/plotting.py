@@ -928,12 +928,12 @@ def plot_labels(boxes, cls, names=(), save_dir=Path(""), on_plot=None):
     y = ax[0].hist(cls, bins=np.linspace(0, nc, nc + 1) - 0.5, rwidth=0.8)
     for i in range(nc):
         y[2].patches[i].set_color([x / 255 for x in colors(i)])
-    ax[0].set_ylabel("实例数")
+    ax[0].set_ylabel("Number of Instances")
     if 0 < len(names) < 30:
         ax[0].set_xticks(range(len(names)))
         ax[0].set_xticklabels(list(names.values()), rotation=90, fontsize=10)
     else:
-        ax[0].set_xlabel("类别")
+        ax[0].set_xlabel("Classes")
     seaborn.histplot(x, x="x", y="y", ax=ax[2], bins=50, pmax=0.9)
     seaborn.histplot(x, x="width", y="height", ax=ax[3], bins=50, pmax=0.9)
 
@@ -1216,8 +1216,8 @@ def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, 
             x = data.values[:, 0]
             for i, j in enumerate(index):
                 y = data.values[:, j].astype("float")
-                ax[i].plot(x, y, marker=".", label=f.stem, linewidth=2, markersize=8)  # 绘制实际结果
-                ax[i].plot(x, gaussian_filter1d(y, sigma=3), ":", label="平滑", linewidth=2)  # 平滑曲线
+                ax[i].plot(x, y, marker=".", label=f.stem, linewidth=2, markersize=8)  # Plot actual results
+                ax[i].plot(x, gaussian_filter1d(y, sigma=3), ":", label="Smoothed", linewidth=2)  # Smoothed curve
                 ax[i].set_title(s[j], fontsize=12)
         except Exception as e:
             LOGGER.warning(f"警告: 绘制 {f} 时出错: {e}")

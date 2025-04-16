@@ -156,27 +156,27 @@ class Bboxes:
             return boxes_list[0]
         return cls(np.concatenate([b.bboxes for b in boxes_list], axis=axis))
 
-def __getitem__(self, index) -> "Bboxes":
-    """
-    使用索引检索特定的边界框或一组边界框。
+    def __getitem__(self, index) -> "Bboxes":
+        """
+        使用索引检索特定的边界框或一组边界框。
 
-    参数:
-        index (int, slice, 或 np.ndarray): 用于选择所需边界框的索引、切片或布尔数组。
+        参数:
+            index (int, slice, 或 np.ndarray): 用于选择所需边界框的索引、切片或布尔数组。
 
-    返回:
-        Bboxes: 包含所选边界框的新Bboxes对象。
+        返回:
+            Bboxes: 包含所选边界框的新Bboxes对象。
 
-    异常:
-        AssertionError: 如果索引的边界框未形成二维矩阵。
+        异常:
+            AssertionError: 如果索引的边界框未形成二维矩阵。
 
-    注意:
-        使用布尔索引时，请确保提供一个与边界框数量相同长度的布尔数组。
-    """
-    if isinstance(index, int):
-        return Bboxes(self.bboxes[index].reshape(1, -1))
-    b = self.bboxes[index]
-    assert b.ndim == 2, f"Indexing on Bboxes with {index} failed to return a matrix!"
-    return Bboxes(b)
+        注意:
+            使用布尔索引时，请确保提供一个与边界框数量相同长度的布尔数组。
+        """
+        if isinstance(index, int):
+            return Bboxes(self.bboxes[index].reshape(1, -1))
+        b = self.bboxes[index]
+        assert b.ndim == 2, f"Indexing on Bboxes with {index} failed to return a matrix!"
+        return Bboxes(b)
 
 
 class Instances:
